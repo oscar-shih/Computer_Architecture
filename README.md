@@ -8,3 +8,5 @@ Electrical Engineering in National Taiwan University 2022 spring
 ## HW2 - Verilog 
 * Finite State Machine
 * RTL level
+
+## Final Project
