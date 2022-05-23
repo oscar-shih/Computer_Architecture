@@ -159,7 +159,7 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
             SLTI: result = (in1 < in2) ? 1'b1 : 1'b0;
             SRLI: result = in1 >> in2;
             SLLI: result = in1 << in2;
-            default: data_reg = 32'b0;
+            default: result = 32'b0;
         endcase
     end
 endmodule
