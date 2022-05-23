@@ -33,9 +33,7 @@ module CHIP(clk,
     //---------------------------------------//
 
     // Todo: other wire/reg
-    reg [31:0] read;
-    wire [31:0] imm;
-    wire [31:0] addr;
+
 
     //---------------------------------------//
     // Do not modify this part!!!            //
@@ -134,19 +132,93 @@ module shiftleft(in1, out);
     output [31:0] out;
     assign out = {in1[30:0], 1'b0};
 endmodule
- 
-// 還沒做ALU那部份 QQ
-module ALU(in1, in2, alu_inst, alu_result, zero);
-    input in1, in2, alu_inst;
-    output alu_result, zero;
 
+module ALU(in1, in2, alu_inst, alu_result, zero);
+    input [31:0] in1, in2;
+    input [3:0] alu_inst;
+    output [31:0] alu_result;
+    output zero;
+    reg [31:0] result;
+    assign alu_result = result;
+    assign zero = (result == 32'b0) ? 1'b1 : 1'b0;
+    // parameters for alu_inst from ALU_Control Unit
+    parameter BEQ4 = 4'b0000;
+    parameter LWSW = 4'b0001;
+    parameter ADDI = 4'b0010; // also for add
+    parameter SLTI = 4'b0011;
+    parameter SLLI = 4'b0100;
+    parameter SRLI = 4'b0101;
+    parameter SUB  = 4'b0110;
+    parameter XOR  = 4'b0111;
+    parameter MUL  = 4'b1000;
+
+    always @(in1 or in2 or alu_inst) begin
+        case(alu_inst)
+            ADDI: result = in1 + in2;
+            SUB: result = in1 - in2;
+            SLTI: result = (in1 < in2) ? 1'b1 : 1'b0;
+            SRLI: result = in1 >> in2;
+            SLLI: result = in1 << in2;
+            default: data_reg = 32'b0;
+        endcase
+    end
 endmodule
 
-module ALU_control(inst, alu_op, alu_inst, mul_op);
+module ALU_control(inst, alu_op, alu_inst, mul_valid);
     input [31:0] inst;
     input [2:0] alu_op;
     output [3:0] alu_inst;
-    output mul_op;
+    output mul_valid; // for the valid in mulDiv
+    reg [3:0] alu;
+    reg mul;
+    assign alu_inst = alu;
+    assign mul_valid = mul;
+
+    // parameters for alu_op from Control Unit
+    parameter BEQ = 3'b000; // beq
+    parameter LS = 3'b001; // lw, sw
+    parameter IMM_INST = 3'b010; // addi, slli, srli, slti (但我沒用srli在我的hw1的.s檔裡)
+    parameter ARITHMETIC = 3'b011; // add, sub, mul
+    parameter LOGIC = 3'b100; // xor, (and, or看你們要不要加，看起來是可以不用啦)
+    
+    // parameters for alu_inst
+    parameter BEQ4 = 4'b0000;
+    parameter LWSW = 4'b0001;
+    parameter ADDI = 4'b0010; // also for add
+    parameter SLTI = 4'b0011;
+    parameter SLLI = 4'b0100;
+    parameter SRLI = 4'b0101;
+    parameter SUB  = 4'b0110;
+    parameter XOR  = 4'b0111;
+    parameter MUL  = 4'b1000;
+
+    always @(*) begin
+        case(alu_op) begin
+            BEQ: alu = BEQ4;
+            LS: alu = LWSW;
+            IMM_INST: begin
+                case(inst[14:12])
+                    3'b000: alu = ADDI; // addi
+                    3'b001: alu = SLTI; // slti
+                    3'b010: alu = SLLI; // slli
+                    3'b011: alu = SRLI; // srli
+                    default: alu = 4'b0000;
+                endcase
+            end
+            ARITHMETIC: begin
+                case(inst[31:25])
+                    7'b0000000: alu = ADDI; // add
+                    7'b0000001: alu = MUL; // mul
+                    7'b0100000: alu = SUB; // sub
+                    default:alu = 4'b0000;
+                endcase
+            end
+            LOGIC: alu = XOR;
+            default: alu = 4'b0000;
+        endcase
+        if (alu_op == ARITHMETIC && inst[31:25] == 7'b0000001) mul_valid = 1'b1;
+        else mul_valid = 1'b0;
+    end
 
 endmodule
 
@@ -155,7 +227,12 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
     input [6:0] inst;
     output branch, mem_read, mem_to_reg, mem_write, alu_src, reg_write;
     output [2:0] alu_op;
-
+    // parameters for alu_op 
+    parameter BEQ = 3'b000; // beq
+    parameter LS = 3'b001; // lw, sw
+    parameter IMM_INST = 3'b010; // addi, slli, srli, slti (但我沒用srli在我的hw1的.s檔裡)
+    parameter ARITHMETIC = 3'b011; // add, sub, mul
+    parameter LOGIC = 3'b100; // xor, (and, or看你們要不要加，看起來是可以不用啦)
 
 endmodule
 
