@@ -10,5 +10,5 @@ Electrical Engineering in National Taiwan University 2022 spring
 * RTL level
 
 ## Final Project
-* TODO1: CPU architecture (ALU part) by Oscar @ 5/23
-* TODO2: Bonus 
+* TODO1: module Control 
+* TODO2: CPU architecture combination
