@@ -1,5 +1,5 @@
 .data
-    n: .word 20
+    n: .word 11
 .text
 .globl __start
 
