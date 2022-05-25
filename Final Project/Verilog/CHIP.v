@@ -46,7 +46,8 @@ module CHIP(clk,
     
     //mul
     wire mul_valid,valid,mode,ready;
-    wire [31:0]out;
+    wire [31:0] mul_out;
+    wire ready;
 
 
     //---------------------------------------//
@@ -62,26 +63,46 @@ module CHIP(clk,
         .q1(rs1_data),                       //
         .q2(rs2_data));                      //
     //---------------------------------------//
-    assign  mem_addr_D  =   alu_result  ;
-    assign  mem_wdata_D =   rs2_data    ;   
 
     // Todo: any combinational/sequential circuit
     
     // Submodule
-    input_generator u_input_generator(.q1(rs1_data),.q2(rs2_data),.inst(mem_rdata_I),.alu_src(alu_src),
-    .now_pc(PC), .in1(in1), .in2(in2));
+    // input_generator u_input_generator(.q1(rs1_data),.q2(rs2_data),.inst(mem_rdata_I),.alu_src(alu_src),
+    // .now_pc(PC), .in1(in1), .in2(in2));
+    wire    [31:0] imm_o;
+   
+    imm_generator u_imm_generator(.inst(mem_rdata_I), .imm_o(imm_o));
 
     Control u_Control(.inst(mem_rdata_I), .branch(branch), .mem_read(mem_read), 
     .mem_to_reg(mem_to_reg), .alu_op(alu_op), .mem_write(mem_wen_D), .alu_src(alu_src), .reg_write(reg_write));
 
     ALU_control u_ALUcontrol( .inst(mem_rdata_I), .alu_op(alu_op), .alu_inst(alu_inst), .mul_valid(mul_valid));
-    
+
+    assign in1 = rs1_data;
+    assign in2 = alu_src ? imm_o :  rs2_data;
+
     ALU u_ALU(.in1(in1), .im2(in2), .alu_inst(alu_inst), .alu_reslut(alu_result),.zero( zero));
     
-    mulDiv u_mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
+    mulDiv u_mulDiv(.clk(clk), .rst_n(rst_n), .valid(mul_valid), .ready(ready), .in_A(in1), .in_B(in2), .out(mul_out));
+
+    assign  mem_addr_D  =  mul_valid? alu_result :mul_out ;
+    assign  mem_wdata_D =  rs2_data    ;   
+
 
     //-----------------------------------------------------------------------//
     //-----------------PC---------------//
+    reg [31:0] pc_4,pc_branch;
+    always @(*) begin
+        if(ready) begin 
+        pc_4=PC+4;
+        pc_branch=PC+(imm_o<<1);
+        end
+        else begin 
+            pc_4=PC;
+            pc_branch=PC;
+        end
+    end
+    PC_nxt=branch ? pc_4:pc_branch;
     
     // 做完CPU architecture的part後，在這組合成圖上的流程圖
     always @(posedge clk or negedge rst_n) begin
@@ -112,33 +133,31 @@ module input_generator(
     output [31:0] in2
 );
     wire    [31:0] imm_o;
-    // reg     [31:0] alu_data1,  alu_data2;
+    reg     [31:0] alu_data1,  alu_data2;
     imm_generator u_imm_generator(inst, imm_o);
-    // // parameters for alu_op from Control Unit
-    // parameter LUI   = 7'b0110111;
-    // parameter AUIPC = 7'b0010111;
-    // parameter JAL   = 7'b1101111;
-    // parameter JALR  = 7'b1100111;
-    // always @(*) begin
-    //     case({inst[6:0]}):
-    //         LUI:        alu_data1 = {imm_o[19:0],12'b0};
-    //         AUIPC:      alu_data1 = {imm_o[19:0],12'b0};
-    //         JAL:        alu_data1 = now_pc;
-    //         JALR:       alu_data1 = now_pc;
-    //         default:    alu_data1 = q1;
-    //     endcase
-    //     case({inst[6:0]}):
-    //         LUI:        alu_data2 = 32'b0;
-    //         AUIPC:      alu_data2 = now_pc;
-    //         JAL:        alu_data2 = 32'd4;
-    //         JALR:       alu_data2 = 32'd4;
-    //         default:    alu_data2 = q2;
-    //     endcase
-    // end
-    // assign in1 =  alu_data1;
-    // assign in2 = alu_src ? imm_o :  alu_data2;
-    assign in1 =  q1;
-    assign in2 = alu_src ? imm_o :  q2;
+    // parameters for alu_op from Control Unit
+    parameter LUI   = 7'b0110111;
+    parameter AUIPC = 7'b0010111;
+    parameter JAL   = 7'b1101111;
+    parameter JALR  = 7'b1100111;
+    always @(*) begin
+        case({inst[6:0]}):
+            LUI:        alu_data1 = {imm_o[19:0],12'b0};
+            AUIPC:      alu_data1 = {imm_o[19:0],12'b0};
+            JAL:        alu_data1 = now_pc;
+            JALR:       alu_data1 = now_pc;
+            default:    alu_data1 = q1;
+        endcase
+        case({inst[6:0]}):
+            LUI:        alu_data2 = 32'b0;
+            AUIPC:      alu_data2 = now_pc;
+            JAL:        alu_data2 = 32'd4;
+            JALR:       alu_data2 = 32'd4;
+            default:    alu_data2 = q2;
+        endcase
+    end
+    assign in1 =  alu_data1;
+    assign in2 = alu_src ? imm_o :  alu_data2;
 endmodule
 
 
@@ -176,6 +195,7 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
     input [10:0] alu_inst;
     output [31:0] alu_result;
     output reg zero;
+    output valid;
     reg [31:0] result;
     assign alu_result = result;
     assign zero = (result == 32'b0) ? 1'b1 : 1'b0;
@@ -274,8 +294,8 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
     // parameter for inst
     parameter LUI =   6'b0110111;
     parameter AUIPC = 6'b0010111;
-    // parameter JAL   = 6'b1101111;
-    // parameter JALR  = 6'b1100111;
+    parameter JAL   = 6'b1101111;
+    parameter JALR  = 6'b1100111;
     parameter BBB   = 6'b1100011;
     parameter LLL   = 6'b0000011;
     parameter SSS   = 6'b0100011;
@@ -303,26 +323,26 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 reg_write = 1'b1;
                 alu_op = LS;
             end
-            // // J
-            // JAL: begin
-            //     branch = 1'b1;
-            //     mem_read = 1'b0;
-            //     mem_to_reg = 1'b0; 
-            //     mem_write = 1'b0; 
-            //     alu_src = 1'b1;
-            //     reg_write = 1'b1;
-            //     alu_op = LS;
-            // end
-            // // I
-            // JALR: begin
-            //     branch = 1'b1;
-            //     mem_read = 1'b0;
-            //     mem_to_reg = 1'b0; 
-            //     mem_write = 1'b0; 
-            //     alu_src = 1'b0;
-            //     reg_write = 1'b1;
-            //     alu_op = LS;
-            // end
+            // J
+            JAL: begin
+                branch = 1'b1;
+                mem_read = 1'b0;
+                mem_to_reg = 1'b0; 
+                mem_write = 1'b0; 
+                alu_src = 1'b1;
+                reg_write = 1'b1;
+                alu_op = LS;
+            end
+            // I
+            JALR: begin
+                branch = 1'b1;
+                mem_read = 1'b0;
+                mem_to_reg = 1'b0; 
+                mem_write = 1'b0; 
+                alu_src = 1'b0;
+                reg_write = 1'b1;
+                alu_op = LS;
+            end
             // B
             BBB: begin
                 branch = 1'b1;
@@ -432,10 +452,9 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
     // Todo: your HW2
     input         clk, rst_n;
     input         valid;
-    input  [1:0]  mode; // mode: 0: mulu, 1: divu, 2: and, 3: avg
-    output        ready;
     input  [31:0] in_A, in_B;
-    output [31:0] out;
+    output reg        ready;
+    output reg [31:0] out;
 
     // Definition of states
     parameter IDLE = 3'd0;
@@ -448,8 +467,7 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
     reg  [63:0] shreg, shreg_nxt;
     reg  [31:0] alu_in, alu_in_nxt;
     reg  [32:0] alu_out;
-    reg  [31:0] out;   // reg for output "out"
-    reg  [ 0:0] ready; // reg for output "ready"
+    //reg  [31:0] out;   // reg for output "out"
 
     always @(*) begin
         if (state == OUT) begin
@@ -458,8 +476,15 @@ module mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
         end 
         else begin
             out = 0;
-            ready = 0;
+            if(!valid) begin
+                ready = 1;
+            end
+            else begin
+                ready=0;
+            end
+            
         end
+
     end
 
     // Combinational always block
