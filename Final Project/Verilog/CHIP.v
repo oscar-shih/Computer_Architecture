@@ -99,7 +99,7 @@ module imm_generator(inst, imm_o);
 endmodule
 
 module ALU(in1, in2, alu_inst, alu_result, zero);
-    input [31:0] in1, in2;
+    input signed [31:0] in1, in2;
     input [10:0] alu_inst;
     output [31:0] alu_result;
     output reg zero;
@@ -107,33 +107,33 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
     assign alu_result = result;
     assign zero = (result == 32'b0) ? 1'b1 : 1'b0;
     // parameters for alu_inst from ALU_Control Unit (f7[5] + f3 + opc)
-    parameter LUI   = 12'b00_000_0110111;
-    parameter AUIPC = 12'b00_000_0010111;
-    parameter JAL   = 12'b00_000_1101111;
-    parameter JALR  = 12'b00_000_1100111;
-    parameter ADDI  = 12'b00_000_0010011;
-    parameter ADD   = 12'b00_000_0110011;
-    parameter SUB   = 12'b10_000_0110011;
-    parameter SLTI  = 12'b00_010_0010011;
-    parameter SRLI  = 12'b00_101_0010011;
-    parameter SLLI  = 12'b00_001_0010011;
-    parameter BEQ   = 12'b00_000_1100011;
-    parameter BNE   = 12'b00_001_1100011;
-    parameter BLT   = 12'b00_100_1100011;
-    parameter BGE   = 12'b00_101_1100011;
+    parameter LS    = 12'b0; // jalr jal auipc lui ld sd
+    parameter BEQ   = 12'b00_000_1100011; // sub
+    parameter BNE   = 12'b00_001_1100011; // sub
+    parameter BLT   = 12'b00_100_1100011; // sub
+    parameter BGE   = 12'b00_101_1100011; // sub
+    parameter ADDI  = 12'bxx_000_0010011; // func
+    parameter ADD   = 12'b00_000_0110011; // func
+    parameter SUB   = 12'b10_000_0110011; // func
+    parameter SLTI  = 12'bxx_010_0010011; // func
+    parameter SRLI  = 12'bxx_101_0010011; // func
+    parameter SLLI  = 12'bxx_001_0010011; // func
 
+    // jal (將 rd 設為pc 的值設為原本的 pc+4，然後將 pc 的值設為 imm 的結果)
+    // jalr (將 rd 設為pc 的值設為原本的 pc+4，然後將 pc 的值設為 給定address內的結果) (rd設為x0則代表不儲存return時的下一個地址)
     always @(in1 or in2 or alu_inst) begin
         case(alu_inst)
-            // lui
-            LUI:  result = {in1[31:12], 12'b0};
-            // auipc
-            AUIPC:result = {in1[31:12], 12'b0} + in2;
-            // jal (將 rd 設為pc 的值設為原本的 pc+4，然後將 pc 的值設為 imm 的結果)
-            JAL:  result = in1 + 2'd4;
-            // jalr (將 rd 設為pc 的值設為原本的 pc+4，然後將 pc 的值設為 給定address內的結果) (rd設為x0則代表不儲存return時的下一個地址)
-            JALR: result = in1 + 2'd4;
+            LS:   result = in1 + in2;
             // addi
             ADDI: result = in1 + in2;
+            // beq
+            BEQ:  result = in1 - in2;
+            // bne
+            BNE:  result = in1 - in2;
+            //blt
+            BLT:  result = in1 - in2;
+            //bge
+            BGE:  result = in1 - in2;
             // add
             ADD: result = in1 + in2;
             SUB:  result = in1 - in2;
@@ -143,26 +143,22 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
             default: result = 32'b0;
         endcase
         case(alu_inst)
-            // jal (將 rd 設為pc 的值設為原本的 pc+4，然後將 pc 的值設為 imm 的結果)
-            JAL:  zero = 1'b1 ;
-            // jalr (將 rd 設為pc 的值設為原本的 pc+4，然後將 pc 的值設為 給定address內的結果) (rd設為x0則代表不儲存return時的下一個地址)
-            JALR: zero = 1'b1 ;
             // beq
-            BEQ: zero = (in1 == in2) ? 1'b1 : 1'b0;
+            BEQ: zero = (result == 32'b0) ? 1'b1 : 1'b0;
             // bne
-            BNE: zero = (in1 != in2) ? 1'b1 : 1'b0;
+            BNE: zero = (result != 32'b0) ? 1'b1 : 1'b0;
             //blt
-            BLT: zero = (in1 <  in2) ? 1'b1 : 1'b0;
+            BLT: zero = (result[31] != 1'b0) ? 1'b1 : 1'b0;
             //bge
-            BGE: zero = (in1 >= in2) ? 1'b1 : 1'b0;
-            default: zero = 1'b0;
+            BGE: zero = (result[31] == 1'b0) ? 1'b1 : 1'b0;
+            default: zero = (result == 32'b0) ? 1'b1 : 1'b0;
         endcase
     end
 endmodule
 
 module ALU_control(inst, alu_op, alu_inst, mul_valid);
     input [31:0] inst;
-    input [2:0] alu_op;
+    input [1:0] alu_op;
     output [3:0] alu_inst;
     output mul_valid; // for the valid in mulDiv
     reg [3:0] alu;
@@ -171,35 +167,19 @@ module ALU_control(inst, alu_op, alu_inst, mul_valid);
     assign mul_valid = mul;
 
     // parameters for alu_op from Control Unit
-    // ** 這邊有些問題，之後可能要重設
-    parameter R  = 2'b10; 
-    parameter ISB = 2'b01; 
-    parameter UJ = 2'b00; 
-    
-    // parameters for alu_op from Control Unit
-    parameter LUI   = 12'b00_000_0110111;
-    parameter AUIPC = 12'b00_000_0010111;
-    parameter JAL   = 12'b00_000_1101111;
-    parameter JALR  = 12'b00_000_1100111;
-    parameter ADDI  = 12'b00_000_0010011;
-    parameter ADD   = 12'b00_000_0110011;
-    parameter SUB   = 12'b10_000_0110011;
-    parameter SLTI  = 12'b00_010_0010011;
-    parameter SRLI  = 12'b00_101_0010011;
-    parameter SLLI  = 12'b00_001_0010011;
-    parameter BEQ   = 12'b00_000_1100011;
-    parameter BNE   = 12'b00_001_1100011;
-    parameter BLT   = 12'b00_100_1100011;
-    parameter BGE   = 12'b00_101_1100011;
+    parameter RI  = 2'b10; 
+    parameter B  = 2'b01; 
+    parameter LS = 2'b00; 
 
     always @(*) begin
-        case(alu_op)
-            ISB: alu = {2'b0, inst[14:12], inst[6:0]};
-            R:   alu = {inst[30],inst[25], inst[14:12], inst[6:0]};
-            UJ:  alu = {5'b0, inst[6:0]}
-            default: alu = 12'b0000;
+        case (alu_op):
+            R: alu = {inst[30],inst[25], inst[14:12], inst[6:0]};
+            B: alu = {2'b0, inst[14:12], inst[6:0]};
+            LS: alu = 12'b0;
+
         endcase
-        if (alu_op == R && inst[31:25] == 7'b0000001) mul_valid = 1'b1;
+        // 可能與I重複到，因此要檢查所有code
+        if (inst[6:0] == 7'b0110011 && inst[31:25] == 7'b0000001) mul_valid = 1'b1;
         else mul_valid = 1'b0;
     end
 endmodule
@@ -208,12 +188,11 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
     // output 可能不只圖上那些，要支援多一點功能要改這裡成比較大的control
     input [6:0] inst;
     output reg branch, mem_read, mem_to_reg, mem_write, alu_src, reg_write;
-    output [2:0] alu_op;
+    output [1:0] alu_op;
     // parameters for alu_op 
-    // ** 這邊有些問題，之後可能要重設
-    parameter R  = 2'b10; 
-    parameter ISB = 2'b01; 
-    parameter UJ = 2'b10; 
+    parameter RI = 2'b10;   // look at funct
+    parameter B  = 2'b01;   // Substract
+    parameter LS = 2'b00;   // ADD
     // parameter for inst
     parameter LUI =   6'b0110111;
     parameter AUIPC = 6'b0010111;
@@ -235,6 +214,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b1;
                 reg_write = 1'b1;
+                alu_op = LS;
             end
             // I
             AUIPC: begin
@@ -244,6 +224,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b1;
                 reg_write = 1'b1;
+                alu_op = LS;
             end
             // J
             JAL: begin
@@ -253,6 +234,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b1;
                 reg_write = 1'b1;
+                alu_op = LS;
             end
             // I
             JALR: begin
@@ -262,6 +244,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b0;
                 reg_write = 1'b1;
+                alu_op = LS;
             end
             // B
             BBB: begin
@@ -271,6 +254,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b0;
                 reg_write = 1'b0;
+                alu_op = B;
             end
             // I
             LLL: begin
@@ -280,6 +264,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b1;
                 reg_write = 1'b1;
+                alu_op = LS;
             end
             SSS: begin
                 branch = 1'b0;
@@ -288,6 +273,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b1; 
                 alu_src = 1'b1;
                 reg_write = 1'b0;
+                alu_op = LS;
             end
             IMM: begin
                 branch = 1'b0;
@@ -296,6 +282,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b1;
                 reg_write = 1'b1;
+                alu_op = RI;
             end
             LOGIC: begin
                 branch = 1'b0;
@@ -303,7 +290,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_to_reg = 1'b0; 
                 mem_write = 1'b0; 
                 alu_src = 1'b0;
-                reg_write = 1'b1;
+                reg_write = RI;
             end
             default: begin
                 branch = 1'b0;
@@ -312,6 +299,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b0;
                 reg_write = 1'b0;
+                reg_write = 2'b11;
             end
         endcase
     end
