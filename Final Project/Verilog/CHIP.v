@@ -35,7 +35,7 @@ module CHIP(clk,
 
     // Todo: other wire/reg
     //contol
-    wire branch, mem_read, mem_to_reg,  mem_write, alu_src;//control
+    wire branch, mem_read, mem_to_reg, alu_src;//control
     wire [1:0] alu_op;//alu_op 2 bits
     // alu input
     wire [31:0] in1,in2;
@@ -47,7 +47,11 @@ module CHIP(clk,
     //mul
     wire mul_valid,valid,ready;
     wire [31:0] mul_out;
+    assign rs1  = mem_rdata_I[19:15];
+    assign rs2  = mem_rdata_I[24:20];
+    assign rd   = mem_rdata_I[11: 7];
 
+    assign rd_data = mem_to_reg? alu_result:mem_rdata_D;
 
     //---------------------------------------//
     // Do not modify this part!!!            //
@@ -65,9 +69,6 @@ module CHIP(clk,
 
     // Todo: any combinational/sequential circuit
     
-    // Submodule
-    // input_generator u_input_generator(.q1(rs1_data),.q2(rs2_data),.inst(mem_rdata_I),.alu_src(alu_src),
-    // .now_pc(PC), .in1(in1), .in2(in2));
     wire    [31:0] imm_o;
    
     imm_generator u_imm_generator(.inst(mem_rdata_I), .imm_o(imm_o));
@@ -100,6 +101,7 @@ module CHIP(clk,
             pc_4=PC;
             pc_branch=PC;
         end
+
     end
     assign PC_nxt=branch ? pc_4:pc_branch;
     assign mem_addr_I =PC_nxt;
