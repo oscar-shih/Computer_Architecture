@@ -51,7 +51,7 @@ module CHIP(clk,
     assign rs2  = mem_rdata_I[24:20];
     assign rd   = mem_rdata_I[11: 7];
 
-    assign rd_data = mem_to_reg? alu_result:mem_rdata_D;
+    assign rd_data = mem_to_reg ? alu_result:mem_rdata_D;
 
     //---------------------------------------//
     // Do not modify this part!!!            //
@@ -93,14 +93,14 @@ module CHIP(clk,
     //-----------------PC---------------//
     reg [31:0] pc_4,pc_branch;
     always @(*) begin
-        if(ready) begin 
+     //   if(ready) begin 
         pc_4=PC+4;
         pc_branch=PC+(imm_o<<1);
-        end
-        else begin 
-            pc_4=PC;
-            pc_branch=PC;
-        end
+        // end
+        // else begin 
+        //     pc_4=PC;
+        //     pc_branch=PC;
+       // end
 
     end
     assign PC_nxt=branch ? pc_4:pc_branch;
@@ -166,7 +166,7 @@ endmodule
 module imm_generator(inst, imm_o);
     input [31:0] inst;
     output reg[31:0] imm_o;
-    always @(inst) begin
+    always @(*) begin//inst) begin
         case(inst[6:0])
             // lui, auipc
             7'b0110111: imm_o = {inst[31:12], {12{1'b0}}};
@@ -201,19 +201,23 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
     assign zero = zero_r;
     // parameters for alu_inst from ALU_Control Unit (f7[5] + f3 + opc)
     parameter LS    = 12'b0; // jalr jal auipc lui ld sd
+
     parameter BEQ   = 12'b00_000_1100011; // sub
     parameter BNE   = 12'b00_001_1100011; // sub
     parameter BLT   = 12'b00_100_1100011; // sub
     parameter BGE   = 12'b00_101_1100011; // sub
+
     parameter ADDI  = 12'bxx_000_0010011; // func
+    
     parameter ADD   = 12'b00_000_0110011; // func
     parameter SUB   = 12'b10_000_0110011; // func
+
     parameter SLTI  = 12'bxx_010_0010011; // func
     parameter SRLI  = 12'bxx_101_0010011; // func
     parameter SLLI  = 12'bxx_001_0010011; // func
 
 
-    always @(in1 or in2 or alu_inst) begin
+    always @(*) begin//in1 or in2 or alu_inst) begin
         //result
         case(alu_inst)
             LS:   result = in1 + in2;
@@ -234,7 +238,7 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
             SLTI: result = (in1 < in2) ? 1'b1 : 1'b0;
             SRLI: result = in1 >> in2;
             SLLI: result = in1 << in2;
-            default: result = 32'b0;
+            default: result = in1 + in2;
         endcase
         //zero
         case(alu_inst)
@@ -250,6 +254,7 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
         endcase
     end
 endmodule
+
 
 //---------------------------------------------------------------------//
 module ALU_control(inst, alu_op, alu_inst, mul_valid);
@@ -389,7 +394,8 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_to_reg = 1'b0; 
                 mem_write = 1'b0; 
                 alu_src = 1'b0;
-                reg_write = RI;
+                reg_write = 1'b1;
+                alu_op = RI;
             end
             default: begin
                 branch = 1'b0;
@@ -398,7 +404,7 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 mem_write = 1'b0; 
                 alu_src = 1'b0;
                 reg_write = 1'b0;
-                reg_write = 2'b11;
+                alu_op = 2'b11;
             end
         endcase
     end
