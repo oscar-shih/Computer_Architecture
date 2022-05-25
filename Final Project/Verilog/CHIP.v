@@ -63,12 +63,62 @@ module CHIP(clk,
     end
 
     // Submodule
-    imm_generator u_imm_generator(inst, imm_o);
+    input_generator u_input_generator(inst, alu_src, in1, in2);
     ALU u_ALU(in1, in2, alu_inst, alu_result, zero);
     ALU_control u_ALUcontrol(inst, alu_op, alu_inst, mul_valid);
     Control u_Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, reg_write);
     reg_file u_regfile(clk, rst_n, wen, a1, a2, aw, d, q1, q2);
     mulDiv u_mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
+endmodule
+
+module input_generator(
+    input  [31:0] inst,
+    input         alu_src,
+    input  [31:0] now_pc,
+    output [31:0] in1,
+    output [31:0] in2
+);
+    wire    [31:0] imm_o;
+    reg     [31:0] rs1, rs2;
+    imm_generator u_imm_generator(inst, imm_o);
+
+    // parameters for alu_op from Control Unit
+    parameter LUI   = 12'bxx_xxx_0110111;
+    parameter AUIPC = 12'bxx_xxx_0010111;
+    parameter JAL   = 12'bxx_xxx_1101111;
+    parameter JALR  = 12'bxx_xxx_1100111;
+    parameter ADDI  = 12'bxx_000_0010011;
+    parameter ADD   = 12'b00_000_0110011;
+    parameter SUB   = 12'b10_000_0110011;
+    parameter SLTI  = 12'bxx_010_0010011;
+    parameter SRLI  = 12'bxx_101_0010011;
+    parameter SLLI  = 12'bxx_001_0010011;
+    parameter BEQ   = 12'bxx_000_1100011;
+    parameter BNE   = 12'bxx_001_1100011;
+    parameter BLT   = 12'bxx_100_1100011;
+    parameter BGE   = 12'bxx_101_1100011;
+
+    always @(*) begin
+        case({inst[30],inst[25],inst[14:12], inst[6:0]}):
+            LUI:  rs1 = {imm_o[19:0],12'b0};
+            AUIPC:rs1 ={imm_o[19:0],12'b0};
+            JAL:  rs1 = now_pc;
+            JALR: rs1 = now_pc;
+            ...
+
+        endcase
+        case({inst[30],inst[25],inst[14:12], inst[6:0]}):
+            LUI:  rs2 = 32'b0;
+            AUIPC:rs2 = now_pc;
+            JAL:  rs2 = 32'd4;
+            JALR: rs2 = 32'd4;
+            ...
+
+        endcase
+    end
+
+    assign in1 = rs1;
+    assign in2 = alu_src ? imm_o : rs2;
 endmodule
 
 // CPU Architecture
@@ -203,7 +253,6 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
     parameter SSS   = 6'b0100011;
     parameter IMM   = 6'b0010011;
     parameter LOGIC = 6'b0110011;
-    // 還未加入 alu_op
     always @(*) begin
         case(inst):
             // I
