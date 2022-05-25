@@ -15,10 +15,11 @@ module CHIP(clk,
     output        mem_wen_D  ;
     output [31:0] mem_addr_D ;
     output [31:0] mem_wdata_D;
+
     input  [31:0] mem_rdata_D;
     // For mem_I
-    output [31:0] mem_addr_I ;
-    input  [31:0] mem_rdata_I;
+    output [31:0] mem_addr_I ;//下個指令的位置
+    input  [31:0] mem_rdata_I;//instuction的值
     
     //---------------------------------------//
     // Do not modify this part!!!            //
@@ -33,6 +34,19 @@ module CHIP(clk,
     //---------------------------------------//
 
     // Todo: other wire/reg
+    //contol
+    wire branch, mem_read, mem_to_reg,  mem_write, alu_src, reg_write;//control
+    wire [1:0] alu_op;//alu_op 2 bits
+    // alu input
+    wire [31:0] in1,in2;
+
+    wire [31:0] alu_result;
+    wire [10:0] alu_inst;
+    wire zero;
+    
+    //mul
+    wire mul_valid,valid,mode,ready;
+    wire [31:0]out;
 
 
     //---------------------------------------//
@@ -40,7 +54,7 @@ module CHIP(clk,
     reg_file reg0(                           //
         .clk(clk),                           //
         .rst_n(rst_n),                       //
-        .wen(regWrite),                      //
+        .wen(reg_write),//有改               //
         .a1(rs1),                            //
         .a2(rs2),                            //
         .aw(rd),                             //
@@ -48,8 +62,27 @@ module CHIP(clk,
         .q1(rs1_data),                       //
         .q2(rs2_data));                      //
     //---------------------------------------//
+    assign  mem_addr_D  =   alu_result  ;
+    assign  mem_wdata_D =   rs2_data    ;   
 
     // Todo: any combinational/sequential circuit
+    
+    // Submodule
+    input_generator u_input_generator(.q1(rs1_data),.q2(rs2_data),.inst(mem_rdata_I),.alu_src(alu_src),
+    .now_pc(PC), .in1(in1), .in2(in2));
+
+    Control u_Control(.inst(mem_rdata_I), .branch(branch), .mem_read(mem_read), 
+    .mem_to_reg(mem_to_reg), .alu_op(alu_op), .mem_write(mem_wen_D), .alu_src(alu_src), .reg_write(reg_write));
+
+    ALU_control u_ALUcontrol( .inst(mem_rdata_I), .alu_op(alu_op), .alu_inst(alu_inst), .mul_valid(mul_valid));
+    
+    ALU u_ALU(.in1(in1), .im2(in2), .alu_inst(alu_inst), .alu_reslut(alu_result),.zero( zero));
+    
+    mulDiv u_mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
+
+    //-----------------------------------------------------------------------//
+    //-----------------PC---------------//
+    
     // 做完CPU architecture的part後，在這組合成圖上的流程圖
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -62,66 +95,53 @@ module CHIP(clk,
         end
     end
 
-    // Submodule
-    input_generator u_input_generator(inst, alu_src, in1, in2);
-    ALU u_ALU(in1, in2, alu_inst, alu_result, zero);
-    ALU_control u_ALUcontrol(inst, alu_op, alu_inst, mul_valid);
-    Control u_Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, reg_write);
-    reg_file u_regfile(clk, rst_n, wen, a1, a2, aw, d, q1, q2);
-    mulDiv u_mulDiv(clk, rst_n, valid, ready, mode, in_A, in_B, out);
+
 endmodule
 
+//-------------------------------------------------------//
+//從reg_file得出rs1,rs2得資料後，因應輸入instruction不同，有些rs1,rs2裡的資料事不能用的
+//故使用這個input_generator 製作ALU所需要的兩個真正的輸入
 module input_generator(
+    input  [31:0] q1,
+    input  [31:0] q2,
     input  [31:0] inst,
     input         alu_src,
     input  [31:0] now_pc,
+
     output [31:0] in1,
     output [31:0] in2
 );
     wire    [31:0] imm_o;
-    reg     [31:0] rs1, rs2;
+    reg     [31:0] alu_data1,  alu_data2;
     imm_generator u_imm_generator(inst, imm_o);
-
     // parameters for alu_op from Control Unit
-    parameter LUI   = 12'bxx_xxx_0110111;
-    parameter AUIPC = 12'bxx_xxx_0010111;
-    parameter JAL   = 12'bxx_xxx_1101111;
-    parameter JALR  = 12'bxx_xxx_1100111;
-    parameter ADDI  = 12'bxx_000_0010011;
-    parameter ADD   = 12'b00_000_0110011;
-    parameter SUB   = 12'b10_000_0110011;
-    parameter SLTI  = 12'bxx_010_0010011;
-    parameter SRLI  = 12'bxx_101_0010011;
-    parameter SLLI  = 12'bxx_001_0010011;
-    parameter BEQ   = 12'bxx_000_1100011;
-    parameter BNE   = 12'bxx_001_1100011;
-    parameter BLT   = 12'bxx_100_1100011;
-    parameter BGE   = 12'bxx_101_1100011;
-
+    parameter LUI   = 7'b0110111;
+    parameter AUIPC = 7'b0010111;
+    parameter JAL   = 7'b1101111;
+    parameter JALR  = 7'b1100111;
     always @(*) begin
-        case({inst[30],inst[25],inst[14:12], inst[6:0]}):
-            LUI:  rs1 = {imm_o[19:0],12'b0};
-            AUIPC:rs1 ={imm_o[19:0],12'b0};
-            JAL:  rs1 = now_pc;
-            JALR: rs1 = now_pc;
-            ...
-
+        case({inst[6:0]}):
+            LUI:        alu_data1 = {imm_o[19:0],12'b0};
+            AUIPC:      alu_data1 = {imm_o[19:0],12'b0};
+            JAL:        alu_data1 = now_pc;
+            JALR:       alu_data1 = now_pc;
+            default:    alu_data1 = q1;
         endcase
-        case({inst[30],inst[25],inst[14:12], inst[6:0]}):
-            LUI:  rs2 = 32'b0;
-            AUIPC:rs2 = now_pc;
-            JAL:  rs2 = 32'd4;
-            JALR: rs2 = 32'd4;
-            ...
-
+        case({inst[6:0]}):
+            LUI:        alu_data2 = 32'b0;
+            AUIPC:      alu_data2 = now_pc;
+            JAL:        alu_data2 = 32'd4;
+            JALR:       alu_data2 = 32'd4;
+            default:    alu_data2 = q2;
         endcase
     end
-
-    assign in1 = rs1;
-    assign in2 = alu_src ? imm_o : rs2;
+    assign in1 =  alu_data1;
+    assign in2 = alu_src ? imm_o :  alu_data2;
 endmodule
 
-// CPU Architecture
+
+// 輸出imm_o
+//---------------------------------------------------------------------------//
 module imm_generator(inst, imm_o);
     input [31:0] inst;
     output reg[31:0] imm_o;
@@ -148,6 +168,7 @@ module imm_generator(inst, imm_o);
     end
 endmodule
 
+//------------------------------------------------------------------//
 module ALU(in1, in2, alu_inst, alu_result, zero);
     input signed [31:0] in1, in2;
     input [10:0] alu_inst;
@@ -172,6 +193,7 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
     // jal (將 rd 設為pc 的值設為原本的 pc+4，然後將 pc 的值設為 imm 的結果)
     // jalr (將 rd 設為pc 的值設為原本的 pc+4，然後將 pc 的值設為 給定address內的結果) (rd設為x0則代表不儲存return時的下一個地址)
     always @(in1 or in2 or alu_inst) begin
+        //result
         case(alu_inst)
             LS:   result = in1 + in2;
             // addi
@@ -187,11 +209,13 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
             // add
             ADD: result = in1 + in2;
             SUB:  result = in1 - in2;
+            //
             SLTI: result = (in1 < in2) ? 1'b1 : 1'b0;
             SRLI: result = in1 >> in2;
             SLLI: result = in1 << in2;
             default: result = 32'b0;
         endcase
+        //zero
         case(alu_inst)
             // beq
             BEQ: zero = (result == 32'b0) ? 1'b1 : 1'b0;
@@ -206,6 +230,7 @@ module ALU(in1, in2, alu_inst, alu_result, zero);
     end
 endmodule
 
+//---------------------------------------------------------------------//
 module ALU_control(inst, alu_op, alu_inst, mul_valid);
     input [31:0] inst;
     input [1:0] alu_op;
@@ -234,6 +259,7 @@ module ALU_control(inst, alu_op, alu_inst, mul_valid);
     end
 endmodule
 
+//----------------------------------------------------------------------------------------//
 module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, reg_write);
     // output 可能不只圖上那些，要支援多一點功能要改這裡成比較大的control
     input [6:0] inst;
@@ -354,17 +380,18 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
     end
 endmodule
 
+//-----------------------------------------------------------//
 module reg_file(clk, rst_n, wen, a1, a2, aw, d, q1, q2);
 
     parameter BITS = 32;
-    parameter word_depth = 32;
+    parameter word_depth = 32;// 32 bits word
     parameter addr_width = 5; // 2^addr_width >= word_depth
 
-    input clk, rst_n, wen; // wen: 0:read | 1:write
+    input clk, rst_n, wen; // wen=Regwrite:  0:read / 1:write
     input [BITS-1:0] d;
-    input [addr_width-1:0] a1, a2, aw;
+    input [addr_width-1:0] a1, a2, aw;//rs1,rs2,rd
 
-    output [BITS-1:0] q1, q2;
+    output [BITS-1:0] q1, q2;//data in rsi,rs2
 
     reg [BITS-1:0] mem [0:word_depth-1];
     reg [BITS-1:0] mem_nxt [0:word_depth-1];
