@@ -112,31 +112,33 @@ module input_generator(
     output [31:0] in2
 );
     wire    [31:0] imm_o;
-    reg     [31:0] alu_data1,  alu_data2;
+    // reg     [31:0] alu_data1,  alu_data2;
     imm_generator u_imm_generator(inst, imm_o);
-    // parameters for alu_op from Control Unit
-    parameter LUI   = 7'b0110111;
-    parameter AUIPC = 7'b0010111;
-    parameter JAL   = 7'b1101111;
-    parameter JALR  = 7'b1100111;
-    always @(*) begin
-        case({inst[6:0]}):
-            LUI:        alu_data1 = {imm_o[19:0],12'b0};
-            AUIPC:      alu_data1 = {imm_o[19:0],12'b0};
-            JAL:        alu_data1 = now_pc;
-            JALR:       alu_data1 = now_pc;
-            default:    alu_data1 = q1;
-        endcase
-        case({inst[6:0]}):
-            LUI:        alu_data2 = 32'b0;
-            AUIPC:      alu_data2 = now_pc;
-            JAL:        alu_data2 = 32'd4;
-            JALR:       alu_data2 = 32'd4;
-            default:    alu_data2 = q2;
-        endcase
-    end
-    assign in1 =  alu_data1;
-    assign in2 = alu_src ? imm_o :  alu_data2;
+    // // parameters for alu_op from Control Unit
+    // parameter LUI   = 7'b0110111;
+    // parameter AUIPC = 7'b0010111;
+    // parameter JAL   = 7'b1101111;
+    // parameter JALR  = 7'b1100111;
+    // always @(*) begin
+    //     case({inst[6:0]}):
+    //         LUI:        alu_data1 = {imm_o[19:0],12'b0};
+    //         AUIPC:      alu_data1 = {imm_o[19:0],12'b0};
+    //         JAL:        alu_data1 = now_pc;
+    //         JALR:       alu_data1 = now_pc;
+    //         default:    alu_data1 = q1;
+    //     endcase
+    //     case({inst[6:0]}):
+    //         LUI:        alu_data2 = 32'b0;
+    //         AUIPC:      alu_data2 = now_pc;
+    //         JAL:        alu_data2 = 32'd4;
+    //         JALR:       alu_data2 = 32'd4;
+    //         default:    alu_data2 = q2;
+    //     endcase
+    // end
+    // assign in1 =  alu_data1;
+    // assign in2 = alu_src ? imm_o :  alu_data2;
+    assign in1 =  q1;
+    assign in2 = alu_src ? imm_o :  q2;
 endmodule
 
 
@@ -272,8 +274,8 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
     // parameter for inst
     parameter LUI =   6'b0110111;
     parameter AUIPC = 6'b0010111;
-    parameter JAL   = 6'b1101111;
-    parameter JALR  = 6'b1100111;
+    // parameter JAL   = 6'b1101111;
+    // parameter JALR  = 6'b1100111;
     parameter BBB   = 6'b1100011;
     parameter LLL   = 6'b0000011;
     parameter SSS   = 6'b0100011;
@@ -301,26 +303,26 @@ module Control(inst, branch, mem_read, mem_to_reg, alu_op, mem_write, alu_src, r
                 reg_write = 1'b1;
                 alu_op = LS;
             end
-            // J
-            JAL: begin
-                branch = 1'b1;
-                mem_read = 1'b0;
-                mem_to_reg = 1'b0; 
-                mem_write = 1'b0; 
-                alu_src = 1'b1;
-                reg_write = 1'b1;
-                alu_op = LS;
-            end
-            // I
-            JALR: begin
-                branch = 1'b1;
-                mem_read = 1'b0;
-                mem_to_reg = 1'b0; 
-                mem_write = 1'b0; 
-                alu_src = 1'b0;
-                reg_write = 1'b1;
-                alu_op = LS;
-            end
+            // // J
+            // JAL: begin
+            //     branch = 1'b1;
+            //     mem_read = 1'b0;
+            //     mem_to_reg = 1'b0; 
+            //     mem_write = 1'b0; 
+            //     alu_src = 1'b1;
+            //     reg_write = 1'b1;
+            //     alu_op = LS;
+            // end
+            // // I
+            // JALR: begin
+            //     branch = 1'b1;
+            //     mem_read = 1'b0;
+            //     mem_to_reg = 1'b0; 
+            //     mem_write = 1'b0; 
+            //     alu_src = 1'b0;
+            //     reg_write = 1'b1;
+            //     alu_op = LS;
+            // end
             // B
             BBB: begin
                 branch = 1'b1;
