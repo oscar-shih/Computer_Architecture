@@ -343,7 +343,10 @@ module ALU_Control(func3,func7, alu_op, alu_inst, mul_op);
     localparam  R   =   3'b010;
     always@(*) begin
     case(alu_op)// beq ld imm r 
-    BEQ : alu_inst = 4'b0110; //beq
+    BEQ : case(func3)
+        3'b000: alu_inst = 4'b0110; //beq
+        3'b101: alu_inst = 4'b1010; //bge
+        endcase
     LS  : alu_inst = 4'b0010; //ld,sd
     IMM : case(func3)//imm //func3
         3'b000: alu_inst = 4'b0010; //addi
@@ -386,6 +389,7 @@ module ALU(data_1, data_2, alu_inst, data_out, zero);
             4'b0010: data_out_r = data_1 + data_2;
             4'b0100: data_out_r = data_1 ^ data_2;
             4'b0110: data_out_r = data_1 - data_2;
+            4'b1010: data_out_r = (data_1 < data_2)? 32'b0:32'b1;
             4'b0111: data_out_r = (data_1 < data_2)? 32'b1:32'b0;
             4'b1000: data_out_r = data_1 >> data_2;
             4'b1001: data_out_r = data_1 << data_2;
@@ -416,8 +420,8 @@ module mul(clk, rst_n, valid, ready, doing_mul, in_A, in_B, out);
     reg  [31:0] alu_in, alu_in_nxt;
     reg  [32:0] alu_out;
     reg  [31:0] out;
-    reg  [0:0] ready;
-    reg [0:0] doing_mul;
+    reg         ready;
+    reg         doing_mul;
     always @(*) begin
     if (state == 3'd2) begin
     out = shreg[31:0];
