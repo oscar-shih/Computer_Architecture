@@ -10,5 +10,4 @@ Electrical Engineering in National Taiwan University 2022 spring
 * RTL level
 
 ## Final Project
-* TODO1: module Control 
-* TODO2: CPU architecture combination
+* 
