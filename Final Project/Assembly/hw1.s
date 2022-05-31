@@ -1,3 +1,5 @@
+
+  
 .data
     n: .word 11
 .text
@@ -8,14 +10,15 @@ FUNCTION:
     addi sp, sp, -8
     sw x1, 4(sp)
     sw a0, 0(sp)
-    
+    beq x9, x0, init
+
     # if n >= 10
     addi x5, x0, 10
-    bge a0, x5, Case1
+    bge x9, x5, Case1
     
     # else if 1 <= n < 10
     addi x5, x0, 1
-    bge a0, x5, Case2
+    bge x9, x5, Case2
     
     # else if n = 0
     addi s1, x0, 7
@@ -23,6 +26,10 @@ FUNCTION:
     addi sp, sp, 8
     jalr x0, 0(x1)
     
+init:
+    addi x9, a0, 0
+    jalr x0, 0(x1)
+
 Case1:
     addi x6, x0, 3
     mul a0, x6, a0  
