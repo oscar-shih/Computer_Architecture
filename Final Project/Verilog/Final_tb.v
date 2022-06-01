@@ -7,7 +7,7 @@
 
 `include "CHIP.v"
 `include "memory.v"
-`define SIZE_TEXT 36  // You can change the size
+`define SIZE_TEXT 50  // You can change the size
 `define SIZE_DATA 36  // You can change the size
 `define SIZE_STACK 36 // You can change the size
 
