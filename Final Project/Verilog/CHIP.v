@@ -502,11 +502,11 @@ module mul(clk, rst_n, valid,in_A, in_B, done, mul_out);
     if (!rst_n) begin
         state_p <= IDLE;
     end
-    else begin
-        state_p <= state_n;
+    else begin 
+        alu_in <= alu_in_next;
         counter_p <= counter_n;
         shreg_p <= shreg_n;
-        alu_in <= alu_in_next;
+        state_p <= state_n;
     end
     end
 endmodule
