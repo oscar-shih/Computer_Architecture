@@ -32,13 +32,13 @@ wire   [31:0] rs2_data    ;              //
 wire   [31:0] rd_data     ;              //
 //---------------------------------------//
 
-assign rs1 = mem_rdata_I[19:15];
-assign rs2 = mem_rdata_I[24:20];
-assign rd = mem_rdata_I[11:7];
+assign rs1  = mem_rdata_I[19:15];
+assign rs2  = mem_rdata_I[24:20];
+assign rd   = mem_rdata_I[11: 7];
 
 //control signal
 wire branch,mem_to_reg,alu_src,auipc,jump,jump_r;
-wire [2:0] alu_op;
+wire [1:0] alu_op;
 wire [3:0] alu_inst;
 wire do_mul;
 
@@ -74,27 +74,26 @@ reg_file reg0(                           //
 Control Control(
 .opcode(mem_rdata_I[6:0]), 
 .branch(branch),
-.mem_write(mem_wen_D),
-.mem_to_reg(mem_to_reg), 
 .alu_op(alu_op), 
 .alu_src(alu_src),
-.auipc(auipc), 
+.mem_write(mem_wen_D), 
 .reg_write(regWrite),
+.mem_to_reg(mem_to_reg), 
+.auipc(auipc),
 .jump(jump),
 .jump_r(jump_r)
 );
+imm_gen imm_gen(
+.inst(mem_rdata_I),
+.imm_o(imm)
+);
 
-ALU_Control ALU_Control(
+ALU_control ALU_control(
 .func7(mem_rdata_I[31:25]),
 .func3(mem_rdata_I[14:12]),  
 .alu_op(alu_op),
 .alu_inst(alu_inst), 
 .do_mul(do_mul)       
-);
-
-imm_gen imm_gen(
-.inst(mem_rdata_I),
-.imm_o(imm)
 );
 
 assign alu_input2=alu_src? imm:rs2_data;
@@ -186,8 +185,10 @@ endmodule
 
 module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, reg_write, jump,jump_r);
     input [6:0] opcode;
+    
     output reg branch, mem_write, mem_to_reg, alu_src, reg_write, auipc,jump,jump_r;
-    output reg [2:0] alu_op;
+    output reg [1:0] alu_op;
+
     localparam IMM  =   7'b0010011;
     localparam R    =   7'b0110011;
     localparam BEQ  =   7'b1100011;
@@ -208,7 +209,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b1;
         jump = 1'b0;
         jump_r = 1'b0;
-        alu_op = 3'b011; 
+        alu_op = 2'b11; 
     end
     R:      begin
         branch = 1'b0;
@@ -219,7 +220,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b1;
         jump = 1'b0;
         jump_r = 1'b0;
-        alu_op = 3'b010; 
+        alu_op = 2'b10; 
     end
     BEQ:    begin 
         branch = 1'b1;
@@ -230,7 +231,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b0;
         jump = 1'b0;
         jump_r = 1'b0;
-        alu_op = 3'b001;
+        alu_op = 2'b01;
     end
     LOAD:   begin
         branch = 1'b0;
@@ -241,7 +242,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b1;     
         jump = 1'b0;
         jump_r = 1'b0;
-        alu_op = 3'b000;
+        alu_op = 2'b00;
     end
     STORE:  begin 
         branch = 1'b0;
@@ -252,7 +253,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b0;
         jump = 1'b0;
         jump_r = 1'b0;
-        alu_op = 3'b000;
+        alu_op = 2'b00;
     end
     AUIPC:  begin 
         branch = 1'b0;
@@ -263,7 +264,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b1;
         jump = 1'b0;
         jump_r = 1'b0;
-        alu_op = 3'b011;
+        alu_op = 2'b11;
     end
     JALR:   begin
         branch = 1'b0;
@@ -274,7 +275,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b1;
         jump = 1'b1; 
         jump_r = 1'b1; 
-        alu_op = 3'b000;
+        alu_op = 2'b00;
     end
     JAL:    begin 
         branch = 1'b0;
@@ -285,7 +286,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b1;
         jump = 1'b1; 
         jump_r = 1'b0; 
-        alu_op = 3'b000;
+        alu_op = 2'b00;
     end
     default:begin
         branch = 1'b0;
@@ -296,7 +297,7 @@ module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, re
         reg_write = 1'b0;
         jump = 1'b0; 
         jump_r = 1'b0;
-        alu_op = 3'b0; 
+        alu_op = 2'b00; 
     end
     endcase 
     end
@@ -305,20 +306,20 @@ endmodule
 
 
 
-module ALU_Control(func3,func7, alu_op, alu_inst, do_mul);
+module ALU_control(func3,func7, alu_op, alu_inst, do_mul);
     input [2:0] func3;
     input [6:0] func7;
-    input [2:0] alu_op;
+    input [1:0] alu_op;
 
     output  reg [3:0]   alu_inst;
     output  reg         do_mul;
 
-    localparam  BEQ =   3'b001;
-    localparam  LS  =   3'b000;
-    localparam  IMM =   3'b011;
-    localparam  R   =   3'b010;
+    localparam  BEQ =   2'b01;
+    localparam  LS  =   2'b00;
+    localparam  IMM =   2'b11;
+    localparam  R   =   2'b10;
     always@(*) begin
-    case(alu_op)// beq ld imm r 
+    case(alu_op)
     BEQ : case(func3)
         3'b000  : alu_inst = 4'b0110; //beq
         3'b101  : alu_inst = 4'b1010; //bge
@@ -332,11 +333,11 @@ module ALU_Control(func3,func7, alu_op, alu_inst, do_mul);
         3'b101: alu_inst = 4'b1000; //srli
         default: alu_inst = 4'b0000;
         endcase
-    R   : case({func7,func3})//r 
-        10'b0000000000: alu_inst = 4'b0010; //add
-        10'b0100000000: alu_inst = 4'b0110; //sub
-        10'b0000001000: alu_inst = 4'b0000; //mul
+    R   : case({func7,func3})
+        10'b0000001000: alu_inst = 4'b0000; //mul 
+        10'b0000000000: alu_inst = 4'b0010; //add 
         10'b0000000100: alu_inst = 4'b0100; //xor
+        10'b0100000000: alu_inst = 4'b0110; //sub   
         default: alu_inst = 4'b0000;
         endcase
     default: alu_inst = 4'b0000;
@@ -365,11 +366,12 @@ module ALU(data_1, data_2, alu_inst, data_out, zero);
             4'b0010: data_out_r = data_1 + data_2;
             4'b0100: data_out_r = data_1 ^ data_2;
             4'b0110: data_out_r = data_1 - data_2;
-            4'b1010: data_out_r = (data_1 >= data_2)? 32'b0:32'b1;
             4'b0111: data_out_r = (data_1 < data_2)? 32'b1:32'b0;
             4'b1000: data_out_r = data_1 >> data_2;
             4'b1001: data_out_r = data_1 << data_2;
-            default: data_out_r = {32{1'b0}};
+            4'b1010: data_out_r = (data_1 >= data_2)? 32'b0:32'b1;
+           
+            default: data_out_r = 32'b0;
         endcase
     end
 endmodule
@@ -382,12 +384,12 @@ module mul(clk, rst_n, valid,in_A, in_B, done, mul_out);
     output [31:0] mul_out;
 
     // Definition of states
-    parameter IDLE = 3'd0;
-    parameter MUL  = 3'd1;
-    parameter OUT  = 3'd2;
+    parameter IDLE = 2'b00;
+    parameter MUL  = 2'b01;
+    parameter OUT  = 2'b10;
 
     // Todo: Wire and reg if needed
-    reg  [ 2:0] state, state_nxt;
+    reg  [ 1:0] state, state_nxt;
     reg  [ 4:0] counter, counter_nxt;
     reg  [63:0] shreg, shreg_nxt;
     reg  [31:0] alu_in, alu_in_nxt;
@@ -428,6 +430,7 @@ module mul(clk, rst_n, valid,in_A, in_B, done, mul_out);
         end
         endcase
         if(state == MUL) counter_nxt = counter + 1;
+
         else counter_nxt = 0;
     end
 // load ALU input-->control:B
@@ -461,6 +464,7 @@ module mul(clk, rst_n, valid,in_A, in_B, done, mul_out);
             if (valid)  shreg_nxt = {32'b0,in_A};
             else shreg_nxt = 0;
     end
+
     MUL:    shreg_nxt={alu_out,shreg[31:1]};
 
     OUT:    shreg_nxt = shreg;
