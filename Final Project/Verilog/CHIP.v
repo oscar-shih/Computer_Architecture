@@ -157,6 +157,185 @@ always @(posedge clk or negedge rst_n) begin
     end
 endmodule
 
+
+
+module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, reg_write, jump,jump_r);
+    input [6:0] opcode;
+    
+    output reg branch, mem_write, mem_to_reg, alu_src, reg_write, auipc,jump,jump_r;
+    output reg [1:0] alu_op;
+
+    localparam IMM  =   7'b0010011;
+    localparam R    =   7'b0110011;
+    localparam BEQ  =   7'b1100011;
+    localparam LOAD =   7'b0000011;
+    localparam STORE=   7'b0100011;
+    localparam AUIPC=   7'b0010111;
+    localparam JAL  =   7'b1101111;
+    localparam JALR =   7'b1100111;
+
+    always @(*) begin
+    case(opcode)
+    IMM:    begin
+        branch = 1'b0;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b0;
+        alu_src = 1'b1;
+        reg_write = 1'b1;
+        jump = 1'b0;
+        jump_r = 1'b0;
+        auipc = 1'b0;
+        alu_op = 2'b11; 
+    end
+    R:      begin
+        branch = 1'b0;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b0;
+        alu_src = 1'b0;
+        reg_write = 1'b1;
+        jump = 1'b0;
+        jump_r = 1'b0;
+        auipc = 1'b0;
+        alu_op = 2'b10; 
+    end
+    BEQ:    begin 
+        branch = 1'b1;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b0;
+        alu_src = 1'b0;
+        reg_write = 1'b0;
+        jump = 1'b0;
+        jump_r = 1'b0;
+        auipc = 1'b0;
+        alu_op = 2'b01;
+    end
+    LOAD:   begin
+        branch = 1'b0;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b1;
+        alu_src = 1'b1;
+        reg_write = 1'b1;     
+        jump = 1'b0;
+        jump_r = 1'b0;
+        auipc = 1'b0;
+        alu_op = 2'b00;
+    end
+    STORE:  begin 
+        branch = 1'b0;
+        mem_write = 1'b1;
+        mem_to_reg = 1'b0;
+        alu_src = 1'b1;
+        reg_write = 1'b0;
+        jump = 1'b0;
+        jump_r = 1'b0;
+        auipc = 1'b0;
+        alu_op = 2'b00;
+    end
+    AUIPC:  begin 
+        branch = 1'b0;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b0;
+        alu_src = 1'b1;
+        reg_write = 1'b1;
+        jump = 1'b0;
+        jump_r = 1'b0;
+        auipc = 1'b1;
+        alu_op = 2'b11;
+    end
+    JALR:   begin
+        branch = 1'b0;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b0;
+        alu_src = 1'b1;
+        reg_write = 1'b1;
+        jump = 1'b1; 
+        jump_r = 1'b1;
+        auipc = 1'b0; 
+        alu_op = 2'b00;
+    end
+    JAL:    begin 
+        branch = 1'b0;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b0;
+        alu_src = 1'b1;
+        reg_write = 1'b1;
+        jump = 1'b1; 
+        jump_r = 1'b0;
+        auipc = 1'b0; 
+        alu_op = 2'b00;
+    end
+    default:begin
+        branch = 1'b0;
+        mem_write = 1'b0;
+        mem_to_reg = 1'b0;
+        alu_src = 1'b0; 
+        reg_write = 1'b0;
+        jump = 1'b0; 
+        jump_r = 1'b0;
+        auipc = 1'b0;
+        alu_op = 2'b00; 
+    end
+    endcase 
+    end
+
+endmodule
+
+
+
+module ALU_control(func3,func7, alu_op, alu_inst, do_mul);
+    input [2:0] func3;
+    input [6:0] func7;
+    input [1:0] alu_op;
+
+    output  reg [3:0]   alu_inst;
+    output  reg         do_mul;
+
+    localparam  BEQ =   2'b01;
+    localparam  LS  =   2'b00;
+    localparam  IMM =   2'b11;
+    localparam  R   =   2'b10;
+
+    localparam  ADD =   4'b0010;
+    localparam  SUB =   4'b0110;
+    localparam  SLL =   4'b1001;
+    localparam  SLT =   4'b0111;
+    localparam  SRL =   4'b1000;
+    localparam  MUL =   4'b0000;
+    localparam  XOR =   4'b0100;
+    localparam  BGE =   4'b1010;
+
+    always@(*) begin
+    case(alu_op)
+    BEQ : case(func3)
+        3'b000  : alu_inst = SUB ; //beq
+        3'b101  : alu_inst = BGE ; //bge
+        default : alu_inst = SUB ;
+        endcase
+    LS  : alu_inst = 4'b0010; //load,store
+    IMM : case(func3)
+        3'b000: alu_inst = ADD; //addi
+        3'b001: alu_inst = SLL; //slli  
+        3'b010: alu_inst = SLT; //slti          
+        3'b101: alu_inst = SRL; //srli
+        default:alu_inst = SUB;
+        endcase
+    R   : case({func7,func3})
+        10'b0000001000: alu_inst = MUL; 
+        10'b0000000000: alu_inst = ADD; 
+        10'b0000000100: alu_inst = XOR; 
+        10'b0100000000: alu_inst = SUB;    
+        default: alu_inst = SUB;
+        endcase
+    default: alu_inst = SUB;
+
+    endcase
+
+    if (alu_op == R && func7[0] == 1'b1) do_mul = 1'b1;
+    else do_mul = 1'b0;
+    
+    end
+endmodule
+
 module imm_gen(inst, imm_o);
     input  [31:0] inst;
     output reg [31:0] imm_o;
@@ -183,174 +362,6 @@ module imm_gen(inst, imm_o);
     endcase
 endmodule
 
-module Control(opcode, branch, mem_write, mem_to_reg, alu_op, alu_src, auipc, reg_write, jump,jump_r);
-    input [6:0] opcode;
-    
-    output reg branch, mem_write, mem_to_reg, alu_src, reg_write, auipc,jump,jump_r;
-    output reg [1:0] alu_op;
-
-    localparam IMM  =   7'b0010011;
-    localparam R    =   7'b0110011;
-    localparam BEQ  =   7'b1100011;
-    localparam LOAD =   7'b0000011;
-    localparam STORE=   7'b0100011;
-    localparam AUIPC=   7'b0010111;
-    localparam JAL  =   7'b1101111;
-    localparam JALR =   7'b1100111;
-
-    always @(*) begin
-    case(opcode)
-    IMM:    begin
-        branch = 1'b0;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b0;
-        alu_src = 1'b1;
-        auipc = 1'b0;
-        reg_write = 1'b1;
-        jump = 1'b0;
-        jump_r = 1'b0;
-        alu_op = 2'b11; 
-    end
-    R:      begin
-        branch = 1'b0;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b0;
-        alu_src = 1'b0;
-        auipc = 1'b0;
-        reg_write = 1'b1;
-        jump = 1'b0;
-        jump_r = 1'b0;
-        alu_op = 2'b10; 
-    end
-    BEQ:    begin 
-        branch = 1'b1;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b0;
-        alu_src = 1'b0;
-        auipc = 1'b0;
-        reg_write = 1'b0;
-        jump = 1'b0;
-        jump_r = 1'b0;
-        alu_op = 2'b01;
-    end
-    LOAD:   begin
-        branch = 1'b0;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b1;
-        alu_src = 1'b1;
-        auipc = 1'b0;
-        reg_write = 1'b1;     
-        jump = 1'b0;
-        jump_r = 1'b0;
-        alu_op = 2'b00;
-    end
-    STORE:  begin 
-        branch = 1'b0;
-        mem_write = 1'b1;
-        mem_to_reg = 1'bx;
-        alu_src = 1'b1;
-        auipc = 1'b0;
-        reg_write = 1'b0;
-        jump = 1'b0;
-        jump_r = 1'b0;
-        alu_op = 2'b00;
-    end
-    AUIPC:  begin 
-        branch = 1'b0;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b0;
-        alu_src = 1'b1;
-        auipc = 1'b1;
-        reg_write = 1'b1;
-        jump = 1'b0;
-        jump_r = 1'b0;
-        alu_op = 2'b11;
-    end
-    JALR:   begin
-        branch = 1'b0;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b0;
-        alu_src = 1'b1;
-        auipc = 1'b0;
-        reg_write = 1'b1;
-        jump = 1'b1; 
-        jump_r = 1'b1; 
-        alu_op = 2'b00;
-    end
-    JAL:    begin 
-        branch = 1'b0;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b0;
-        alu_src = 1'b1;
-        auipc = 1'b0;
-        reg_write = 1'b1;
-        jump = 1'b1; 
-        jump_r = 1'b0; 
-        alu_op = 2'b00;
-    end
-    default:begin
-        branch = 1'b0;
-        mem_write = 1'b0;
-        mem_to_reg = 1'b0;
-        alu_src = 1'b0;
-        auipc = 1'b0;
-        reg_write = 1'b0;
-        jump = 1'b0; 
-        jump_r = 1'b0;
-        alu_op = 2'b00; 
-    end
-    endcase 
-    end
-
-endmodule
-
-
-
-module ALU_control(func3,func7, alu_op, alu_inst, do_mul);
-    input [2:0] func3;
-    input [6:0] func7;
-    input [1:0] alu_op;
-
-    output  reg [3:0]   alu_inst;
-    output  reg         do_mul;
-
-    localparam  BEQ =   2'b01;
-    localparam  LS  =   2'b00;
-    localparam  IMM =   2'b11;
-    localparam  R   =   2'b10;
-    always@(*) begin
-    case(alu_op)
-    BEQ : case(func3)
-        3'b000  : alu_inst = 4'b0110; //beq
-        3'b101  : alu_inst = 4'b1010; //bge
-        default : alu_inst = 4'b0000;
-        endcase
-    LS  : alu_inst = 4'b0010; //load,store
-    IMM : case(func3)//imm //func3
-        3'b000: alu_inst = 4'b0010; //addi
-        3'b001: alu_inst = 4'b1001; //slli  
-        3'b010: alu_inst = 4'b0111; //slti          
-        3'b101: alu_inst = 4'b1000; //srli
-        default: alu_inst = 4'b0000;
-        endcase
-    R   : case({func7,func3})
-        10'b0000001000: alu_inst = 4'b0000; //mul 
-        10'b0000000000: alu_inst = 4'b0010; //add 
-        10'b0000000100: alu_inst = 4'b0100; //xor
-        10'b0100000000: alu_inst = 4'b0110; //sub   
-        default: alu_inst = 4'b0000;
-        endcase
-    default: alu_inst = 4'b0000;
-
-    endcase
-
-    if (alu_op == R && func7[0] == 1'b1) do_mul = 1'b1;
-    else do_mul = 1'b0;
-    
-    end
-endmodule
-
-
 module ALU(data_1, data_2, alu_inst, data_out, zero);
     input [31:0] data_1, data_2;
     input [3:0] alu_inst;
@@ -359,22 +370,32 @@ module ALU(data_1, data_2, alu_inst, data_out, zero);
 
     reg [31:0] data_out_r;
     assign data_out = data_out_r;
-
     assign zero = (data_out_r== 32'b0)? 1'b1:1'b0;
+
+    localparam  ADD =   4'b0010;
+    localparam  SUB =   4'b0110;
+    localparam  SLL =   4'b1001;
+    localparam  SLT =   4'b0111;
+    localparam  SRL =   4'b1000;
+    localparam  MUL =   4'b0000;
+    localparam  XOR =   4'b0100;
+    localparam  BGE =   4'b1010;
+
     always @(*) begin
         case(alu_inst)
-            4'b0010: data_out_r = data_1 + data_2;
-            4'b0100: data_out_r = data_1 ^ data_2;
-            4'b0110: data_out_r = data_1 - data_2;
-            4'b0111: data_out_r = (data_1 < data_2)? 32'b1:32'b0;
-            4'b1000: data_out_r = data_1 >> data_2;
-            4'b1001: data_out_r = data_1 << data_2;
-            4'b1010: data_out_r = (data_1 >= data_2)? 32'b0:32'b1;
+            ADD: data_out_r = data_1 + data_2;
+            XOR: data_out_r = data_1 ^ data_2;
+            SUB: data_out_r = data_1 - data_2;
+            SLT: data_out_r = (data_1 < data_2)? 32'b1:32'b0;
+            SRL: data_out_r = data_1 >> data_2;
+            SLL: data_out_r = data_1 << data_2;
+            BGE: data_out_r = (data_1 >= data_2)? 32'b0:32'b1;
            
             default: data_out_r = 32'b0;
         endcase
     end
 endmodule
+
 module mul(clk, rst_n, valid,in_A, in_B, done, mul_out);
 
     input         clk, rst_n;
@@ -383,110 +404,114 @@ module mul(clk, rst_n, valid,in_A, in_B, done, mul_out);
     output  reg      done;
     output [31:0] mul_out;
 
-    // Definition of states
+    // Definition of state_ps
     parameter IDLE = 2'b00;
     parameter MUL  = 2'b01;
     parameter OUT  = 2'b10;
 
     // Todo: Wire and reg if needed
-    reg  [ 1:0] state, state_nxt;
-    reg  [ 4:0] counter, counter_nxt;
-    reg  [63:0] shreg, shreg_nxt;
-    reg  [31:0] alu_in, alu_in_nxt;
+    reg  [ 1:0] state_p, state_n;
+    reg  [ 4:0] counter_p, counter_n;
+    reg  [63:0] shreg_p, shreg_n;
+    reg  [31:0] alu_in, alu_in_next;
     reg  [32:0] alu_out;
-
-    assign mul_out=shreg[31:0];
+    assign mul_out=shreg_p[31:0];
 //FSM
 //-------------------------------------------------------
     always @(*) begin
-        case(state)
+        case(state_p)
             IDLE: begin
                 if (valid) begin
-                    state_nxt = MUL;
+                    state_n = MUL;
+                    counter_n = 0;
                     done = 0;
                 end
                 else begin
-                    state_nxt = IDLE;
+                    state_n = IDLE;
+                    counter_n = 0;
                     done = 1;
                 end
             end
             MUL : begin 
-                if (counter == 5'd31) begin
-                    state_nxt = OUT;
+                if (counter_p == 5'd31) begin
+                    state_n = OUT;
+                    counter_n = counter_p + 1;
                     done = 0;
                 end
                 else begin
-                    state_nxt = MUL;
+                    state_n = MUL;
+                    counter_n = counter_p + 1;
                     done = 0;
                 end
             end
             OUT : begin
-                state_nxt = IDLE;
+                state_n = IDLE;
+                counter_n = 0;
                 done = 1;
             end
             default : begin
-                state_nxt = OUT;
+                state_n = OUT;
+                counter_n = 0;
                 done = 1;
         end
         endcase
-        if(state == MUL) counter_nxt = counter + 1;
-
-        else counter_nxt = 0;
     end
 // load ALU input-->control:B
 //-----------------------------------------------------
     always @(*) begin
-    case(state)
+    case(state_p)
     IDLE: begin           
-        if (valid)  alu_in_nxt = in_B;
-        else alu_in_nxt = 0;
+        if (valid)  alu_in_next = in_B;
+        else alu_in_next = 0;
     end
-    OUT : alu_in_nxt = 0;
-    default: alu_in_nxt = alu_in;
+    MUL:alu_in_next = alu_in;
+    OUT : alu_in_next = 0;
+    default: alu_in_next = alu_in;
+    endcase
+    end
+
+//shift register
+//-----------------------------------------------------------
+    always @(*) begin
+    case(state_p)
+    IDLE: begin
+            if (valid)  shreg_n = {32'b0,in_A};
+            else shreg_n = 0;
+    end
+
+    MUL:    shreg_n={alu_out,shreg_p[31:1]};
+
+    OUT:    shreg_n = shreg_p;
+    default:shreg_n = 64'b0;
+
     endcase
     end
 // ALU output
 //------------------------------------------------------
     always @(*) begin
-    case(state)
-    MUL: begin
-        if(shreg[0]==1) alu_out=shreg[63:32]+alu_in;
-        else alu_out=shreg[63:32];
-    end
-    default: alu_out = 0;
-    endcase
-    end
-//shift register
-//-----------------------------------------------------------
-    always @(*) begin
-    case(state)
-    IDLE: begin
-            if (valid)  shreg_nxt = {32'b0,in_A};
-            else shreg_nxt = 0;
-    end
+        if(state_p== MUL) begin
+            if(shreg_p[0]==1) alu_out=shreg_p[63:32]+alu_in;
+            else alu_out=shreg_p[63:32];
+        end
+        else alu_out = 0;
+        end
 
-    MUL:    shreg_nxt={alu_out,shreg[31:1]};
-
-    OUT:    shreg_nxt = shreg;
-    default:shreg_nxt = 0;
-
-    endcase
-    end
+//pipeline
 //--------------------------------------------------------------------
     always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        state <= IDLE;
+        state_p <= IDLE;
     end
     else begin
-        state <= state_nxt;
-        counter <= counter_nxt;
-        shreg <= shreg_nxt;
-        alu_in <= alu_in_nxt;
+        state_p <= state_n;
+        counter_p <= counter_n;
+        shreg_p <= shreg_n;
+        alu_in <= alu_in_next;
     end
     end
 endmodule
 
-
+//don't change'
 
 module reg_file(clk, rst_n, wen, a1, a2, aw, d, q1, q2);
     parameter BITS = 32;
