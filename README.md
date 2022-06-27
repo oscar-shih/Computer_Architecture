@@ -10,4 +10,4 @@ Electrical Engineering in National Taiwan University 2022 spring
 * RTL level
 
 ## Final Project
-* Work with @boentsai and @ericchiu
+* Work with [boentsai](https://github.com/Boentsai) and [ericchiu](https://github.com/inQuitiVe)
